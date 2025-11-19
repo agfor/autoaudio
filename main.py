@@ -11,6 +11,7 @@ class AutoAudio(QMainWindow):
     primary_changed = Signal(str)
     fallback_changed = Signal(str)
     boost_state_changed = Signal(bool)
+    stop_requested = Signal()
 
     def __init__(self, app):
         super().__init__()
@@ -24,6 +25,7 @@ class AutoAudio(QMainWindow):
         self.primary_changed.connect(self.router.set_primary_filter)
         self.fallback_changed.connect(self.router.set_fallback_filter)
         self.boost_state_changed.connect(self.router.set_boost)
+        self.stop_requested.connect(self.router.stop)
 
         self.setup_window()
         if QSystemTrayIcon.isSystemTrayAvailable():
@@ -34,6 +36,7 @@ class AutoAudio(QMainWindow):
         self.timer.timeout.connect(lambda: None)
 
     def start(self):
+        self.show()
         self.router.devices_changed.connect(self.update_ui)
         self.thread.started.connect(self.router.run)
         self.thread.finished.connect(self.router.stop)
@@ -42,9 +45,6 @@ class AutoAudio(QMainWindow):
         self.app.exec()
 
     def update_ui(self, device_info):
-        if not self.isVisible():
-            self.show()
-
         self.device_info = device_info
         if self.input.isSignalConnected(QMetaMethod.fromSignal(self.input.currentTextChanged)):
             self.input.currentTextChanged.disconnect()
@@ -144,6 +144,7 @@ class AutoAudio(QMainWindow):
 
     def closeEvent(self, event = None):
         self.timer.stop()
+        self.stop_requested.emit()
         self.thread.quit()
         self.thread.wait()
         QApplication.quit()
@@ -154,6 +155,8 @@ if __name__ == '__main__':
     import traceback
 
     app = QApplication([])
+    icon = app.style().standardIcon(QStyle.SP_MediaVolume)
+    app.setWindowIcon(icon)
     auto_audio = AutoAudio(app)
     signal.signal(signal.SIGINT, lambda *args: auto_audio.closeEvent())
     sys.excepthook = lambda et, ev, tb: print("".join(traceback.format_exception(et, ev, tb)))
