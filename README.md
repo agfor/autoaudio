@@ -1,5 +1,2 @@
-## Todos
-
-* Icon sometimes doesn't show properly in taskbar
-* https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-deploy.html
-* Takes a long time to start and a long time to resume after sleep.
+* copy files + cmd.exe //C deploy.bat + run
+* Including unneeded dlls like pdf. Find a list and try removing.

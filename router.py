@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from PySide6.QtCore import QObject, Signal, QtMsgType, qInstallMessageHandler
+from PySide6.QtCore import QObject, Signal, QtMsgType, qInstallMessageHandler, QTimer
 from PySide6.QtMultimedia import QAudio, QAudioFormat, QAudioSink, QAudioSource, QMediaDevices
 
 class AutoAudioRouter(QObject):
@@ -12,6 +12,7 @@ class AutoAudioRouter(QObject):
         self.stopped = False
         self.rebuilding = False
         self.last_rebuild_time = 0
+        self.recovery_timer = None
         self.peak_history = np.zeros(1000, dtype=np.int16)
         self.history_index = 0
         self.input_filter = "Virtual Audio Cable"
@@ -41,7 +42,7 @@ class AutoAudioRouter(QObject):
             self.sink.stop()
         self.sink = QAudioSink(device, self.format, parent=self)
         self.outstream = self.sink.start()
-        self.sink.stateChanged.connect(self.sink_changed)
+        self.sink.stateChanged.connect(self.state_changed)
 
     def build_source(self):
         if self.source:
@@ -54,7 +55,7 @@ class AutoAudioRouter(QObject):
         self.source = QAudioSource(self.input_device, self.format, parent=self)
         self.instream = self.source.start()
         self.instream.readyRead.connect(self.process_input)
-        self.source.stateChanged.connect(self.source_changed)
+        self.source.stateChanged.connect(self.state_changed)
 
     def detect_device(self):
         old_input = self.input_device
@@ -92,18 +93,36 @@ class AutoAudioRouter(QObject):
         }
         self.devices_changed.emit(device_info)
 
-    def sink_changed(self, state: QAudio.State):
-        if state in (QAudio.State.StoppedState, QAudio.State.SuspendedState) and not self.stopped:
-            print(f"Sink {state}, rebuilding via detect_device...")
-            self.detect_device()
-
-    def source_changed(self, state: QAudio.State):
-        if state in (QAudio.State.StoppedState, QAudio.State.SuspendedState) and not self.stopped:
-            print(f"Source {state}, rebuilding via detect_device...")
-            self.detect_device()
+    def state_changed(self, state: QAudio.State):
+        if state.value in (QAudio.State.StoppedState.value, QAudio.State.SuspendedState.value) and not self.stopped:
+            self.start_recovery_polling()
 
     def find_device(self, devices, filter):
         return next((d for d in devices if filter in d.description()), None)
+
+    def start_recovery_polling(self):
+        if not self.recovery_timer:
+            self.recovery_timer = QTimer(self)
+            self.recovery_timer.timeout.connect(self.try_recovery)
+            self.recovery_timer.start(1000)
+
+    def try_recovery(self):
+        source_state = self.source.state() if self.source else None
+        sink_state = self.sink.state() if self.sink else None
+
+        stopped_values = (QAudio.State.StoppedState.value, QAudio.State.SuspendedState.value)
+        source_needs_rebuild = not self.source or (source_state is not None and source_state.value in stopped_values)
+        sink_needs_rebuild = not self.sink or (sink_state is not None and sink_state.value in stopped_values)
+
+        if source_needs_rebuild or sink_needs_rebuild:
+            self.query_fresh_devices()
+            if source_needs_rebuild:
+                self.build_source()
+            if sink_needs_rebuild:
+                self.build_sink(self.primary_device if self.primary_device else self.fallback_device)
+        else:
+            self.recovery_timer.stop()
+            self.recovery_timer = None
 
     def query_fresh_devices(self):
         input_devices = self.media_devices.audioInputs()
@@ -142,6 +161,8 @@ class AutoAudioRouter(QObject):
 
     def stop(self):
         self.stopped = True
+        if self.recovery_timer:
+            self.recovery_timer.stop()
         self.source.stop()
         self.sink.stop()
 
