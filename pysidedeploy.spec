@@ -40,7 +40,7 @@ qml_files =
 excluded_qml_plugins = 
 
 # qt modules used. comma separated
-modules = Multimedia,Widgets,Network,Gui,Core
+modules = Gui,Widgets,Network,Core,Multimedia
 
 # qt plugins used by the application. only relevant for desktop deployment
 # for qt plugins used in android application see [android][plugins]
@@ -68,7 +68,7 @@ macos.permissions =
 mode = onefile
 
 # specify any extra nuitka arguments
-extra_args = --no-progressbar --lto=yes --python-flag=no_docstrings --python-flag=no_asserts --noinclude-dlls=*unicodedata* --noinclude-dlls=shiboken6/msvcp140*.dll --noinclude-qt-translations --noinclude-qt-plugins=imageformats --noinclude-qt-plugins=iconengines --noinclude-qt-plugins=tls --noinclude-dlls=opengl32sw.dll --noinclude-dlls=d3dcompiler_47.dll --noinclude-dlls=libssl-3-x64.dll --noinclude-dlls=libcrypto-3-x64.dll --noinclude-dlls=*/qdirect2d.dll --noinclude-dlls=*/qoffscreen.dll --noinclude-dlls=*/qminimal.dll --noinclude-dlls=*/ffmpegmediaplugin.dll --noinclude-dlls=avcodec-61.dll --noinclude-dlls=avformat-61.dll --noinclude-dlls=avutil-59.dll --noinclude-dlls=swscale-8.dll --noinclude-dlls=swresample-5.dll --noinclude-unittest-mode=nofollow --noinclude-pytest-mode=nofollow --nofollow-import-to=unittest,pdb,email,http,xmlrpc,ssl,ftplib,telnetlib,socketserver,html,xml,unicodedata,decimal,lzma,bz2,hashlib,multiprocessing,concurrent,asyncio,PySide6.QtPdf,PySide6.QtPdfWidgets,PySide6.QtWebEngine,PySide6.QtWebEngineWidgets,PySide6.QtWebEngineCore,PySide6.QtQml,PySide6.QtQuick,PySide6.Qt3DCore,PySide6.Qt3DRender,PySide6.QtCharts,PySide6.QtDataVisualization,PySide6.QtSvg,PySide6.QtSvgWidgets,PySide6.QtOpenGL,PySide6.QtOpenGLWidgets,PySide6.QtBluetooth,PySide6.QtNfc,PySide6.QtPositioning,PySide6.QtSensors,PySide6.QtSerialPort,PySide6.QtTest,PySide6.QtXml
+extra_args = --no-progressbar --lto=yes --windows-console-mode=disable --python-flag=no_docstrings --python-flag=no_asserts --noinclude-dlls=*unicodedata* --noinclude-dlls=shiboken6/msvcp140*.dll --noinclude-qt-translations --noinclude-qt-plugins=imageformats --noinclude-qt-plugins=iconengines --noinclude-qt-plugins=tls --noinclude-dlls=opengl32sw.dll --noinclude-dlls=d3dcompiler_47.dll --noinclude-dlls=libssl-3-x64.dll --noinclude-dlls=libcrypto-3-x64.dll --noinclude-dlls=*/qdirect2d.dll --noinclude-dlls=*/qoffscreen.dll --noinclude-dlls=*/qminimal.dll --noinclude-dlls=*/ffmpegmediaplugin.dll --noinclude-dlls=avcodec-61.dll --noinclude-dlls=avformat-61.dll --noinclude-dlls=avutil-59.dll --noinclude-dlls=swscale-8.dll --noinclude-dlls=swresample-5.dll --noinclude-unittest-mode=nofollow --noinclude-pytest-mode=nofollow --nofollow-import-to=unittest,pdb,email,http,xmlrpc,ssl,ftplib,telnetlib,socketserver,html,xml,unicodedata,decimal,lzma,bz2,hashlib,multiprocessing,concurrent,asyncio,PySide6.QtPdf,PySide6.QtPdfWidgets,PySide6.QtWebEngine,PySide6.QtWebEngineWidgets,PySide6.QtWebEngineCore,PySide6.QtQml,PySide6.QtQuick,PySide6.Qt3DCore,PySide6.Qt3DRender,PySide6.QtCharts,PySide6.QtDataVisualization,PySide6.QtSvg,PySide6.QtSvgWidgets,PySide6.QtOpenGL,PySide6.QtOpenGLWidgets,PySide6.QtBluetooth,PySide6.QtNfc,PySide6.QtPositioning,PySide6.QtSensors,PySide6.QtSerialPort,PySide6.QtTest,PySide6.QtXml
 
 [buildozer]
 
