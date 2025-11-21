@@ -1,5 +1,5 @@
 import time
-import numpy as np
+from array import array
 from PySide6.QtCore import QObject, Signal, QtMsgType, qInstallMessageHandler, QTimer
 from PySide6.QtMultimedia import QAudio, QAudioFormat, QAudioSink, QAudioSource, QMediaDevices
 
@@ -13,7 +13,7 @@ class AutoAudioRouter(QObject):
         self.rebuilding = False
         self.last_rebuild_time = 0
         self.recovery_timer = None
-        self.peak_history = np.zeros(1000, dtype=np.int16)
+        self.peak_history = [0] * 1000
         self.history_index = 0
         self.input_filter = "Virtual Audio Cable"
         self.fallback_filter = "Speakers"
@@ -172,12 +172,12 @@ class AutoAudioRouter(QObject):
         self.outstream.write(self.data)
         self.data = self.instream.read(32000)
         if self.boost:
-            np_data = np.frombuffer(self.data, dtype=np.int16)
-            self.peak_history[self.history_index] = np.max(np.abs(np_data))
+            samples = array('h', self.data)
+            self.peak_history[self.history_index] = max(abs(s) for s in samples)
             self.history_index = (self.history_index + 1) % 1000
-            peak_level = np.max(self.peak_history)
+            peak_level = max(self.peak_history)
             actual_gain = 32767 / peak_level if peak_level > 10369 else 3.16
-            self.data = (np_data * actual_gain).astype(np.int16).tobytes()
+            self.data = array('h', (int(s * actual_gain) for s in samples))
 
 if __name__ == '__main__':
     import signal
