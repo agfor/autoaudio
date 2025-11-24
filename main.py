@@ -1,4 +1,4 @@
-from PySide6.QtCore import QEvent, QMetaMethod, QTimer, Qt, QThread, Signal
+from PySide6.QtCore import QEvent, QMetaMethod, QTimer, Qt, QThread, Signal, Slot
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                  QComboBox, QLineEdit, QCheckBox, QSystemTrayIcon,
@@ -11,7 +11,6 @@ class AutoAudio(QMainWindow):
     primary_changed = Signal(str)
     fallback_changed = Signal(str)
     boost_state_changed = Signal(bool)
-    stop_requested = Signal()
 
     def __init__(self, app):
         super().__init__()
@@ -25,12 +24,11 @@ class AutoAudio(QMainWindow):
         self.primary_changed.connect(self.router.set_primary_filter)
         self.fallback_changed.connect(self.router.set_fallback_filter)
         self.boost_state_changed.connect(self.router.set_boost)
-        self.stop_requested.connect(self.router.stop)
 
+        self.tray_icon = None
+        self.boost_action = None
         self.setup_window()
-        if QSystemTrayIcon.isSystemTrayAvailable():
-            self.app.setQuitOnLastWindowClosed(False)
-            self.setup_system_tray()
+        self.tray_icon = self.setup_system_tray()
 
         self.timer = QTimer()
         self.timer.timeout.connect(lambda: None)
@@ -44,6 +42,7 @@ class AutoAudio(QMainWindow):
         self.timer.start(500)
         self.app.exec()
 
+    @Slot(object)
     def update_ui(self, device_info):
         self.device_info = device_info
         if self.input.isSignalConnected(QMetaMethod.fromSignal(self.input.currentTextChanged)):
@@ -57,7 +56,7 @@ class AutoAudio(QMainWindow):
         self.input.setCurrentText(device_info['input_device'])
         self.primary.clear()
         self.primary.addItems(["Device not connected"] + device_info['output_devices'])
-        if device_info['primary_device']:
+        if device_info['primary_device'] and device_info['primary_device'] != "None":
             self.primary.setCurrentText(device_info['primary_device'])
         self.primary_filter.setText(device_info['primary_filter'])
         self.fallback.clear()
@@ -69,7 +68,8 @@ class AutoAudio(QMainWindow):
         self.primary_filter.returnPressed.connect(self.filter_changed)
         self.fallback.currentTextChanged.connect(self.ui_change)
 
-    def ui_change(self):
+    @Slot(str)
+    def ui_change(self, text=None):
         if not self.device_info:
             return
 
@@ -81,11 +81,21 @@ class AutoAudio(QMainWindow):
         if self.primary.currentText() not in ("Device not connected", self.device_info['primary_device']):
             self.primary_changed.emit(self.primary.currentText())
 
+    @Slot()
     def filter_changed(self):
         self.primary_changed.emit(self.primary_filter.text())
 
+    @Slot(int)
     def boost_changed(self, state):
-        self.boost_state_changed.emit(bool(state))
+        checked = bool(state)
+        self.boost.blockSignals(True)
+        self.boost.setChecked(checked)
+        self.boost.blockSignals(False)
+        if self.boost_action:
+            self.boost_action.blockSignals(True)
+            self.boost_action.setChecked(checked)
+            self.boost_action.blockSignals(False)
+        self.boost_state_changed.emit(checked)
 
     def setup_window(self):
         self.setWindowTitle("AutoAudio")
@@ -120,15 +130,24 @@ class AutoAudio(QMainWindow):
         layout.addStretch()
 
     def setup_system_tray(self):
-        self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(self.style().standardIcon(QStyle.SP_MediaVolume))
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return None
+        self.app.setQuitOnLastWindowClosed(False)
+        tray_icon = QSystemTrayIcon(self)
+        tray_icon.setIcon(self.style().standardIcon(QStyle.SP_MediaVolume))
         tray_menu = QMenu()
+        self.boost_action = QAction("Toggle Volume Boost", self)
+        self.boost_action.setCheckable(True)
+        self.boost_action.toggled.connect(self.boost_changed)
+        tray_menu.addAction(self.boost_action)
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self.closeEvent)
         tray_menu.addAction(quit_action)
-        self.tray_icon.setContextMenu(tray_menu)
-        self.tray_icon.activated.connect(self.tray_icon_activated)
+        tray_icon.setContextMenu(tray_menu)
+        tray_icon.activated.connect(self.tray_icon_activated)
+        return tray_icon
 
+    @Slot(int)
     def tray_icon_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:
             self.showNormal()
@@ -138,13 +157,12 @@ class AutoAudio(QMainWindow):
             self.tray_icon.hide()
 
     def changeEvent(self, event):
-        if event.type() == QEvent.WindowStateChange and self.windowState() & Qt.WindowMinimized:
+        if self.tray_icon and event.type() == QEvent.WindowStateChange and self.windowState() & Qt.WindowMinimized:
             self.tray_icon.show()
             self.hide()
 
-    def closeEvent(self, event = None):
+    def closeEvent(self, event=None):
         self.timer.stop()
-        self.stop_requested.emit()
         self.thread.quit()
         self.thread.wait()
         QApplication.quit()

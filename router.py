@@ -1,11 +1,11 @@
 import time
 from array import array
 from collections import deque
-from PySide6.QtCore import QObject, Signal, QtMsgType, qInstallMessageHandler, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, qInstallMessageHandler, QTimer
 from PySide6.QtMultimedia import QAudio, QAudioFormat, QAudioSink, QAudioSource, QMediaDevices
 
 class AutoAudioRouter(QObject):
-    devices_changed = Signal(dict)
+    devices_changed = Signal(object)
 
     def __init__(self, boost = False):
         super().__init__()
@@ -21,18 +21,22 @@ class AutoAudioRouter(QObject):
         self.data = bytes()
         self.sink = self.source = self.primary_device = self.fallback_device = self.input_device = None
 
+    @Slot(str)
     def set_input_filter(self, filter):
         self.input_filter = filter
         self.detect_device()
 
+    @Slot(str)
     def set_fallback_filter(self, filter):
         self.fallback_filter = filter
         self.detect_device()
 
+    @Slot(str)
     def set_primary_filter(self, filter):
         self.primary_filter = filter
         self.detect_device()
 
+    @Slot(bool)
     def set_boost(self, boost):
         self.boost = boost
 
@@ -57,6 +61,7 @@ class AutoAudioRouter(QObject):
         self.instream.readyRead.connect(self.process_input)
         self.source.stateChanged.connect(self.state_changed)
 
+    @Slot()
     def detect_device(self):
         old_input = self.input_device
         old_fallback = self.fallback_device
@@ -65,8 +70,11 @@ class AutoAudioRouter(QObject):
         input_devices, output_devices = self.query_fresh_devices()
 
         if self.input_device != old_input:
-            print("Input device changed:", self.input_device.description())
-            self.build_source()
+            if self.input_device:
+                print("Input device changed:", self.input_device.description())
+                self.build_source()
+            else:
+                print("Input device not found")
 
         fallback_changed = self.fallback_device != old_fallback
         primary_changed = self.primary_device != old_primary
@@ -80,8 +88,12 @@ class AutoAudioRouter(QObject):
                 if primary_changed:
                     print("Primary device not connected")
                 elif fallback_changed:
-                    print("Fallback device changed:", self.fallback_device.description())
-                self.build_sink(self.fallback_device)
+                    if self.fallback_device:
+                        print("Fallback device changed:", self.fallback_device.description())
+                    else:
+                        print("Fallback device not found")
+                if self.fallback_device:
+                    self.build_sink(self.fallback_device)
 
         device_info = {
             'input_devices': [d.description() for d in input_devices],
@@ -93,8 +105,9 @@ class AutoAudioRouter(QObject):
         }
         self.devices_changed.emit(device_info)
 
-    def state_changed(self, state: QAudio.State):
-        if state.value in (QAudio.State.StoppedState.value, QAudio.State.SuspendedState.value) and not self.stopped:
+    @Slot(int)
+    def state_changed(self, state):
+        if state in (QAudio.State.StoppedState, QAudio.State.SuspendedState) and not self.stopped:
             self.start_recovery_polling()
 
     def find_device(self, devices, filter):
@@ -106,13 +119,14 @@ class AutoAudioRouter(QObject):
             self.recovery_timer.timeout.connect(self.try_recovery)
             self.recovery_timer.start(1000)
 
+    @Slot()
     def try_recovery(self):
         source_state = self.source.state() if self.source else None
         sink_state = self.sink.state() if self.sink else None
 
-        stopped_values = (QAudio.State.StoppedState.value, QAudio.State.SuspendedState.value)
-        source_needs_rebuild = not self.source or (source_state is not None and source_state.value in stopped_values)
-        sink_needs_rebuild = not self.sink or (sink_state is not None and sink_state.value in stopped_values)
+        stopped_states = (QAudio.State.StoppedState, QAudio.State.SuspendedState)
+        source_needs_rebuild = not self.source or (source_state is not None and source_state in stopped_states)
+        sink_needs_rebuild = not self.sink or (sink_state is not None and sink_state in stopped_states)
 
         if source_needs_rebuild or sink_needs_rebuild:
             self.query_fresh_devices()
@@ -149,34 +163,40 @@ class AutoAudioRouter(QObject):
             self.build_sink(self.primary_device if self.primary_device else self.fallback_device)
             self.rebuilding = False
 
+    @Slot()
     def run(self):
         qInstallMessageHandler(self.qt_message_handler)
         self.media_devices = QMediaDevices(parent=self)
-        self.format = QAudioFormat(parent=self)
+        self.format = QAudioFormat()
         self.format.setSampleRate(48000)
         self.format.setChannelCount(2)
         self.format.setSampleFormat(QAudioFormat.Int16)
         self.detect_device()
         self.media_devices.audioOutputsChanged.connect(self.detect_device)
 
+    @Slot()
     def stop(self):
         self.stopped = True
         if self.recovery_timer:
             self.recovery_timer.stop()
-        self.source.stop()
-        self.sink.stop()
+        if self.source:
+            self.source.stop()
+        if self.sink:
+            self.sink.stop()
 
+    @Slot()
     def process_input(self):
         if self.rebuilding:
             return
         self.outstream.write(self.data)
         self.data = self.instream.read(32000)
-        if self.boost:
-            samples = array('h', self.data)
+        if self.boost and self.data:
+            samples = array('h')
+            samples.frombytes(self.data)
             self.peak_history.append(max(abs(s) for s in samples))
-            peak_level = max(self.peak_history)
+            peak_level = max(self.peak_history) if self.peak_history else 1
             actual_gain = 32767 / peak_level if peak_level > 10369 else 3.16
-            self.data = array('h', (int(s * actual_gain) for s in samples))
+            self.data = array('h', (int(s * actual_gain) for s in samples)).tobytes()
 
 if __name__ == '__main__':
     import signal
