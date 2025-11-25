@@ -34,7 +34,10 @@ class AutoAudio(QMainWindow):
         self.timer.timeout.connect(lambda: None)
 
     def start(self):
-        self.show()
+        if self.tray_icon:
+            self.tray_icon.show()
+        else:
+            self.show()
         self.router.devices_changed.connect(self.update_ui)
         self.thread.started.connect(self.router.run)
         self.thread.finished.connect(self.router.stop)
